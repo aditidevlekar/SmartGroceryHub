@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Seller — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --accent:#059669; --muted:#6b7280;}
+    body{ font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto; background:linear-gradient(180deg,#f7ffef,#f0fff4); min-height:100vh; margin:0;}
+    header{ background: linear-gradient(90deg,#10b981,#059669); color:white;}
+    .card{ background:white; border-radius:12px; padding:16px; box-shadow:0 10px 30px rgba(11,15,20,0.06);}
+    .modal-bg {position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,0.45); z-index:60; padding:20px; opacity:0; pointer-events:none; transition:opacity .18s;}
+    .modal-bg.show{opacity:1; pointer-events:auto;}
+    .modal-card{width:100%; max-width:720px; border-radius:12px; overflow:hidden; transform:translateY(8px); transition:transform .18s;}
+    .banner {position:fixed; left:50%; transform:translateX(-50%); top:18px; z-index:70; max-width:720px; width:calc(100% - 48px); display:flex; gap:12px; align-items:center; padding:10px 14px; border-radius:10px; box-shadow:0 8px 30px rgba(2,6,23,0.08); opacity:0; pointer-events:none; transition:all .28s ease;}
+    .banner.show{opacity:1; top:28px; pointer-events:auto;}
+    .banner.success{background:linear-gradient(90deg,#ecfdf5,#dcfce7); border:1px solid rgba(16,185,129,0.12); color:#16a34a;}
+    .banner.error{background:linear-gradient(90deg,#fff1f2,#fee2e2); border:1px solid rgba(220,38,38,0.08); color:#dc2626;}
+    .veg-card{ border-radius:12px; overflow:hidden; background:white; box-shadow:0 8px 20px rgba(11,15,20,0.04); display:flex; flex-direction:column;}
+    .veg-img { width:100%; aspect-ratio:1/1; background:linear-gradient(180deg,#fff,#f8fff8); display:flex;justify-content:center;align-items:center;}
+    .veg-img img{width:100%;height:100%;object-fit:cover;}
+    .veg-body{ padding:12px; display:flex; flex-direction:column; gap:8px; flex:1;}
+    .veg-foot{ display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-top:1px solid #f3f4f6;}
+    .grid { display:grid; gap:12px; grid-template-columns: repeat(1,1fr);}
+    @media (min-width:640px){ .grid { grid-template-columns: repeat(2,1fr);} }
+    .action-btn{ padding:8px 10px; border-radius:8px; font-weight:600; font-size:14px;}
+    .btn-small { padding:6px 10px; border-radius:8px; font-size:13px;}
+    .orders-popup-bg{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:160;background:rgba(0,0,0,0.32);}
+    .orders-popup-sheet{width:100%;max-width:420px;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -4px 32px #0002;animation:slideup .3s;}
+    @keyframes slideup{from{transform:translateY(100%);}to{transform:translateY(0);}}
+    .order-row{padding: 14px 8px; margin: 0 0 8px 0; border-bottom:1px solid #f3f3f3;}
+    .status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;}
+    .status-pending{background:#fbbf24;}
+    .status-accepted{background:#059669;}
+    .status-rejected{background:#dc2626;}
+  </style>
+</head>
+<body class="min-h-screen">
+<div id="banner" class="banner" role="status" aria-live="polite"></div>
+<header class="p-4">
+  <div class="max-w-lg mx-auto flex justify-between items-center">
+    <h1 class="text-lg font-semibold">Seller</h1>
+    <div>
+      <span id="userEmail" class="mr-2 text-sm"></span>
+      <button id="showOrdersBtn" class="px-3 py-1 rounded-lg bg-white/20 text-green-800 font-semibold border">Orders</button>
+      <button id="logout" class="px-3 py-1 rounded-lg bg-white/10">Logout</button>
+    </div>
+  </div>
+</header>
+<main class="max-w-lg mx-auto p-4 grid gap-6">
+<section class="card">
+  <div class="flex flex-col gap-2 mb-3">
+    <div class="flex gap-2">
+      <input id="searchInput" class="p-3 border rounded-lg w-full" placeholder="Search item" />
+      <button id="refreshBtn" class="px-4 py-2 rounded-lg border btn-small">Refresh</button>
+    </div>
+    <div>
+      <button id="addBtn" class="px-4 py-2 rounded-lg bg-green-600 text-white w-full">Add Item</button>
+    </div>
+  </div>
+  <div id="inventoryGrid" class="grid"></div>
+</section>
+</main>
+<!-- Add/Edit modal -->
+<div id="modal" class="modal-bg" aria-hidden="true">
+  <div class="modal-card bg-white p-6 rounded-xl" style="max-width:350px;margin:auto;">
+    <h3 id="modalTitle" class="font-semibold mb-2">Add Item</h3>
+    <div class="space-y-2">
+      <input id="itemName" class="w-full p-3 border rounded" placeholder="Name (e.g., Tomato)" />
+      <input id="itemImage" class="w-full p-3 border rounded" placeholder="Image URL (opt)" />
+      <input id="itemStock" type="number" class="w-full p-3 border rounded" placeholder="Stock (e.g. 30)" />
+      <input id="itemUnit" class="w-full p-3 border rounded" placeholder="Unit (kg/pc)" value="kg"/>
+      <input id="itemPrice" type="number" class="w-full p-3 border rounded" placeholder="Price (per unit)" />
+      <button id="aiSuggestPriceBtn" type="button" class="px-4 py-2 rounded-lg border text-green-700 font-semibold">AI Suggest Price</button>
+    </div>
+    <div class="flex justify-end gap-2 mt-3">
+      <button id="cancel" class="px-4 py-2 rounded-lg border">Cancel</button>
+      <button id="save" class="px-4 py-2 rounded-lg bg-green-600 text-white">Save</button>
+    </div>
+    <input id="editId" type="hidden" />
+  </div>
+</div>
+<!-- AI Price Popup -->
+<div id="aiPricePopup" style="display:none;z-index:200;" class="fixed inset-0 flex items-end justify-center px-2 pb-7 bg-black/30">
+  <div class="bg-white rounded-lg shadow-lg p-4 w-full max-w-xs mx-auto">
+    <h4 class="text-base font-semibold mb-2">AI Price Suggestion</h4>
+    <div id="aiPricePopupContent" class="text-sm text-gray-700"></div>
+    <button id="aiPricePopupClose" class="mt-4 w-full px-4 py-2 rounded-lg border text-gray-700 bg-gray-100">Close</button>
+  </div>
+</div>
+<!-- Orders Popup -->
+<div id="ordersPopup" class="orders-popup-bg" style="display:none;">
+  <div class="orders-popup-sheet">
+    <div class="p-4 border-b flex items-center justify-between">
+      <span class="text-base font-semibold">Customer Orders</span>
+      <button id="closeOrdersPopup" class="text-2xl text-green-800">&times;</button>
+    </div>
+    <div id="ordersList" class="p-2 pb-6 text-sm" style="max-height:65vh;overflow-y:auto;"></div>
+  </div>
+</div>
+<script>
+const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7Skuc9-AdvYsnYqs9qVSF90kCn7eJtP20U0BUTNeUVvcO0qtc98fdhArmUsxUYf1bUA/exec';
+function showBanner(text,type='success',timeout=2800){
+  const b=document.getElementById('banner');
+  b.className='banner '+(type==='success'?'success':'error')+' show';
+  b.innerHTML=`<span>${text}</span>`;
+  if(timeout)setTimeout(()=>b.className='banner',timeout);
+}
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+async function apiGet(params){
+  const url = APP_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url); const txt = await res.text();
+  try { return JSON.parse(txt); } catch{ return { success:false, message:'Backend error:'+txt}; }
+}
+function placeholderSvg(){
+  return 'data:image/svg+xml;utf8,'+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><rect width='100%' height='100%' fill='#f3f4f6'/><text x='50%' y='50%' font-size='38' text-anchor='middle' fill='#ccc' dy='.3em'>IMG</text></svg>");
+}
+function productImageHtml(url, name){
+  const src = url ? escapeHtml(url) : placeholderSvg();
+  return `<img src="${src}" alt="${escapeHtml(name)}" class="w-full h-full" style="object-fit:cover;" onerror="this.src='${placeholderSvg()}'" />`;
+}
+async function loadInventory(){
+  const ownerEmail=localStorage.getItem('sellerEmail')||'';
+  const q=document.getElementById('searchInput').value.trim();
+  const grid=document.getElementById('inventoryGrid'); grid.innerHTML='Loading...';
+  const r=await apiGet({action:'fetchInventory', ownerEmail, search:q});
+  if(!r.success){ grid.innerHTML='<div class="text-red-600">Failed to load</div>'; return; }
+  const items=r.items||[]; if(items.length===0){ grid.innerHTML='<div class="text-sm text-gray-500">No items yet.</div>'; return;}
+  grid.innerHTML='';
+  items.forEach(it=>{
+    const div = document.createElement('div');
+    div.className='veg-card';
+    div.innerHTML = `
+      <div class="veg-img">${productImageHtml(it.image,it.item)}</div>
+      <div class="veg-body">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="font-medium text-sm truncate">${escapeHtml(it.item)}</div>
+            <div class="text-xs text-gray-500 mt-1">Stock: ${escapeHtml(it.stock||0)} ${escapeHtml(it.unit||'kg')}</div>
+          </div>
+          <div class="text-lg font-semibold text-green-700">₹${escapeHtml(it.price||0)}/${escapeHtml(it.unit||'kg')}</div>
+        </div>
+        <div class="mt-1 text-xs text-gray-500 truncate">${escapeHtml(it.ownerEmail||'')}</div>
+      </div>
+      <div class="veg-foot">
+        <button class="action-btn border btn-small" data-edit="${escapeHtml(it.id)}">Edit</button>
+        <button class="action-btn border text-red-600 btn-small" data-del="${escapeHtml(it.id)}" data-name="${escapeHtml(it.item)}">Delete</button>
+      </div>
+    `;
+    div.querySelector('[data-edit]')?.addEventListener('click',()=>openModal(it));
+    div.querySelector('[data-del]')?.addEventListener('click',()=>openConfirmDelete(it));
+    grid.appendChild(div);
+  });
+}
+let _deleteTargetId = null;
+function openConfirmDelete(obj){
+  _deleteTargetId=obj.id;
+  if(confirm("Delete "+obj.item+"?")) deleteItem();
+}
+async function deleteItem(){
+  const ownerEmail=localStorage.getItem('sellerEmail')||'';
+  const r=await apiGet({action:'deleteInventory',ownerEmail,id:_deleteTargetId});
+  if(!r.success)showBanner(r.message||'Delete failed','error'); else{showBanner('Deleted','success');loadInventory();}
+  _deleteTargetId=null;
+}
+function openModal(it){
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('editId').value=it?.id||'';
+  document.getElementById('itemName').value=it?.item||'';
+  document.getElementById('itemImage').value=it?.image||'';
+  document.getElementById('itemStock').value=it?.stock||'';
+  document.getElementById('itemUnit').value=it?.unit||'kg';
+  document.getElementById('itemPrice').value=it?.price||'';
+  document.getElementById('modalTitle').textContent=(it&&it.id)?'Edit Item':'Add Item';
+}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('save').onclick=async function(){
+  const ownerEmail=localStorage.getItem('sellerEmail')||'';
+  if(!ownerEmail){showBanner('Please login','error');window.location.href='seller_auth.html';return;}
+  const id=document.getElementById('editId').value||'',item=document.getElementById('itemName').value.trim(),
+    image=document.getElementById('itemImage').value.trim(),unit=document.getElementById('itemUnit').value.trim()||'kg',
+    stock=Number(document.getElementById('itemStock').value)||0,price=Number(document.getElementById('itemPrice').value)||0;
+  if(!item){showBanner('Enter item name','error');return;}
+  closeModal();
+  const r=await apiGet({action:'saveInventory',ownerEmail,id,item,image,stock,unit,price});
+  if(!r.success)showBanner(r.message||'Save failed','error');else{showBanner('Saved','success');loadInventory();}
+};
+document.getElementById('cancel').onclick=closeModal;
+document.getElementById('addBtn').onclick=()=>openModal({});
+document.getElementById('refreshBtn').onclick=loadInventory;
+document.getElementById('logout').onclick=()=>{
+  localStorage.removeItem('sellerEmail');
+  location.href='seller_auth.html';
+};
+document.getElementById('searchInput').addEventListener('keydown',(e)=>{if(e.key==='Enter')loadInventory();});
+document.addEventListener('DOMContentLoaded',()=>{
+  const email=localStorage.getItem('sellerEmail');if(!email)window.location.href='seller_auth.html';
+  document.getElementById('userEmail').textContent=email;
+  loadInventory();
+});
+
+// --- AI Smart Pricing Assistant ---
+document.getElementById("aiSuggestPriceBtn").onclick = async function() {
+  const itemName = document.getElementById('itemName').value.trim();
+  if (!itemName) { showBanner("Enter item name first", "error"); return; }
+  const btn = document.getElementById("aiSuggestPriceBtn");
+  btn.disabled = true; btn.textContent = "Thinking...";
+  try {
+    const r = await apiGet({ action: "suggestPrice", item: itemName });
+    btn.disabled = false; btn.textContent = "AI Suggest Price";
+    if (!r.success) { showBanner(r.message || "No AI data", "error"); return; }
+    let html = `<div><b>Recommended:</b> ₹${r.price || ""}</div>`;
+    if (r.min) html += `<div class="mt-1 text-xs">Min: ₹${r.min} &nbsp;/&nbsp; Max: ₹${r.max||""}</div>`;
+    if (r.trend) html += `<div class="mt-1 text-xs italic">Market trend: ${r.trend}</div>`;
+    document.getElementById("aiPricePopupContent").innerHTML = html;
+    document.getElementById("aiPricePopup").style.display = "flex";
+  } catch (e) {
+    btn.disabled = false; btn.textContent = "AI Suggest Price";
+    showBanner("AI network error", "error");
+  }
+};
+document.getElementById("aiPricePopupClose").onclick = function() {
+  document.getElementById("aiPricePopup").style.display = "none";
+};
+
+// --- Orders popup ---
+document.getElementById('showOrdersBtn').onclick = async ()=>{
+  document.getElementById('ordersPopup').style.display='flex';
+  loadOrders();
+};
+document.getElementById('closeOrdersPopup').onclick = ()=>{ document.getElementById('ordersPopup').style.display='none'; };
+async function loadOrders(){
+  const email=localStorage.getItem('sellerEmail')||'';const list=document.getElementById('ordersList');
+  list.innerHTML='<div class="py-7 text-center text-sm text-gray-500">Loading orders...</div>';
+  const r=await apiGet({action:'fetchOrders',sellerEmail:email});
+  if(!r.success||!r.orders||!r.orders.length){ list.innerHTML='<div class="py-8 text-center text-gray-400">No orders yet.</div>'; return;}
+  list.innerHTML='';
+  r.orders.forEach(order=>{
+    const div=document.createElement('div');
+    div.className='order-row';
+    div.innerHTML=`
+    <div class="flex justify-between gap-2 items-center">
+      <span class="font-semibold">${escapeHtml(order.item)}  <span class="text-xs text-gray-600"> (${order.quantity} ${escapeHtml(order.unit)})</span></span>
+      <span>
+        <span class="status-dot status-${order.status}"></span>
+        <span class="text-xs font-semibold">${order.status.charAt(0).toUpperCase()+order.status.slice(1)}</span>
+      </span>
+    </div>
+    <div class="text-xs text-gray-500 mt-1">From: ${escapeHtml(order.buyerEmail||'')}</div>
+    <div class="flex gap-2 mt-1 mb-1">
+      ${order.status==='pending'?
+      `<button class="px-3 py-1 rounded bg-green-600 text-white" data-accept="${order.id}">Accept</button>
+       <button class="px-3 py-1 rounded bg-red-600 text-white" data-reject="${order.id}">Reject</button>`
+      :
+      `<span class="italic text-xs text-gray-400">Processed: ${escapeHtml(order.status)}</span>`
+      }
+    </div>
+    `;
+    if(order.status==='pending'){
+      div.querySelector('[data-accept]').onclick=()=>handleOrderAction(order.id,'accepted');
+      div.querySelector('[data-reject]').onclick=()=>handleOrderAction(order.id,'rejected');
+    }
+    list.appendChild(div);
+  });
+}
+async function handleOrderAction(orderId,action){
+  const email=localStorage.getItem('sellerEmail')||'';
+  const resp=await apiGet({action:'updateOrderStatus',orderId:orderId,sellerEmail:email,status:action});
+  showBanner(resp.message||("Order "+action),'success');
+  loadOrders();
+  loadInventory();
+}
+</script>
+</body>
+</html>

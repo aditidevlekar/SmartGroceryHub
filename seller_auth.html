@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Seller — Auth</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --accent:#059669; --danger:#dc2626; }
+    body{ font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto; background:linear-gradient(180deg,#f7ffef,#f0fff4); min-height:100vh; }
+    .glass{ background: rgba(255,255,255,0.92); backdrop-filter: blur(6px); box-shadow:0 12px 30px #05966905; border-radius:14px; padding:28px; max-width:420px; }
+    .active{ color:var(--accent); border-bottom:3px solid var(--accent); }
+    .input-focus:focus{ outline:none; box-shadow:0 6px 20px #05966912; border-color: #05966963; }
+    .banner {position:fixed; left:50%; transform:translateX(-50%); top:18px; z-index:60; max-width:400px; width:95vw; padding:10px 14px; border-radius:10px; box-shadow:0 8px 30px #0002; opacity:0; pointer-events:none; transition:.3s;}
+    .banner.show{opacity:1; top:28px; pointer-events:auto;}
+    .banner.success{background:#ecfdf5; color:#059669;}
+    .banner.error{background:#fff1f2; color:#dc2626;}
+    .modal-bg {position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(2,6,23,0.45); z-index:70; opacity:0; pointer-events:none; transition:.2s;}
+    .modal-bg.show{opacity:1; pointer-events:auto;}
+    .modal-card{width:100%; max-width:360px; border-radius:12px; overflow:hidden; transform:translateY(8px);}
+  </style>
+</head>
+<body class="flex items-center justify-center p-6">
+
+  <div id="banner" class="banner" role="status" aria-live="polite"></div>
+
+  <div class="glass">
+    <h1 class="text-2xl font-semibold text-green-700 text-center mb-3">Seller Portal</h1>
+    <div id="statusBox" class="text-sm text-center p-2 rounded-md bg-gray-50 text-gray-600 mb-4">Checking connection...</div>
+    <div class="flex border-b mb-4">
+      <button id="loginTab" class="flex-1 py-2 active text-center" onclick="switchTab('login')">Login</button>
+      <button id="registerTab" class="flex-1 py-2 text-center" onclick="switchTab('register')">Register</button>
+    </div>
+    <form id="loginForm" onsubmit="event.preventDefault(); loginSeller();" class="space-y-3">
+      <input id="loginEmail" type="email" placeholder="Email" required class="w-full p-3 border rounded-lg input-focus" />
+      <input id="loginPassword" type="password" placeholder="Password" required class="w-full p-3 border rounded-lg input-focus" />
+      <button class="w-full py-3 rounded-lg bg-green-600 text-white">Login</button>
+    </form>
+    <form id="registerForm" onsubmit="event.preventDefault(); registerSeller();" class="space-y-3 hidden">
+      <input id="regName" required placeholder="Shop Name" class="w-full p-3 border rounded-lg input-focus" />
+      <input id="regEmail" type="email" required placeholder="Email" class="w-full p-3 border rounded-lg input-focus" />
+      <input id="regPassword" type="password" minlength="5" required placeholder="Password" class="w-full p-3 border rounded-lg input-focus" />
+      <button class="w-full py-3 rounded-lg bg-green-600 text-white">Create Account</button>
+    </form>
+    <p id="message" class="text-center text-sm mt-4 text-gray-600"></p>
+  </div>
+
+<script>
+const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7Skuc9-AdvYsnYqs9qVSF90kCn7eJtP20U0BUTNeUVvcO0qtc98fdhArmUsxUYf1bUA/exec';
+function showBanner(msg,type='success',timeout=3200){const b=document.getElementById('banner');b.textContent=msg;b.className='banner '+type+' show';setTimeout(()=>b.className='banner',timeout);}
+function setStatus(txt, ok=true){const el=document.getElementById('statusBox');el.textContent=txt;el.style.background=ok?'#ecfdf5':'#fff1f2';el.style.color=ok?'#059669':'#dc2626';}
+function clearMessage(){document.getElementById('message').textContent='';}
+function showInlineMessage(txt, err=false){const el=document.getElementById('message');el.textContent=txt;el.style.color=err?'crimson':'#065f46';}
+async function apiGet(params){const url=APP_SCRIPT_URL+'?'+new URLSearchParams(params).toString();const r=await fetch(url);const t=await r.text();try{return JSON.parse(t);}catch{return{success:false,message:'Invalid JSON: '+t};}}
+async function checkConn(){try{const r=await apiGet({action:'checkConnection'});if(r.success)setStatus('Connected',true);else setStatus('No backend','error');}catch{setStatus('Connection error',false);}}
+async function registerSeller(){
+  showInlineMessage('Registering...');
+  try{
+    const r=await apiGet({action:'register',name:regName.value.trim(),email:regEmail.value.trim(),password:regPassword.value,type:'seller'});
+    if(r.success){showBanner('Registered','success');switchTab('login');} else {showInlineMessage(r.message||'Registration failed',true);showBanner(r.message||'Registration failed','error');}
+  }catch(e){showInlineMessage('Network error',true);}
+}
+async function loginSeller(){
+  showInlineMessage('Logging in...');
+  try{
+    const r=await apiGet({action:'login',email:loginEmail.value.trim(),password:loginPassword.value,type:'seller'});
+    if(r.success){localStorage.setItem('sellerEmail',r.user.email);showBanner('Login success','success');setTimeout(()=>location.href='seller_dashboard.html',600);}
+    else {showInlineMessage(r.message||'Login failed',true);showBanner(r.message||'Login failed','error');}
+  }catch(e){showInlineMessage('Network error',true);}
+}
+function switchTab(t){document.getElementById('loginForm').classList.toggle('hidden',t!=='login');document.getElementById('registerForm').classList.toggle('hidden',t!=='register');document.getElementById('loginTab').classList.toggle('active',t==='login');document.getElementById('registerTab').classList.toggle('active',t==='register');clearMessage();}
+document.addEventListener('DOMContentLoaded',()=>{checkConn();});
+</script>
+</body>
+</html>
